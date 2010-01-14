@@ -76,7 +76,7 @@ dnl Check for the SDL_vnc lib
 have_sdlvnc=no
 AC_CHECK_LIB(SDL_vnc, vncConnect , have_sdlvnc=yes)
 if test x$have_sdlvnc = xyes; then
-    LIBS="$LIBS -lSDL_vnc -lSDL_image"
+    LIBS="$LIBS -lSDL_vnc -lSDL_image -lSDL_ttf"
 else
     AC_MSG_ERROR([
 *** Unable to find SDL_vnc library

@@ -17,12 +17,20 @@
 #include <ctype.h>
 
 #include <SDL/SDL.h>
+#include <SDL/SDL_ttf.h>
 
 #include "SDL/SDL_vnc.h"
-#include "SFont.h"
 
 #define DEFAULT_W	320
 #define DEFAULT_H	480
+#define VERSION		"1.00"
+//Ubuntu
+//#define FONT		"/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
+//Palm Pre
+#define FONT		"/usr/share/fonts/PreludeCondensed-Medium.ttf"
+
+
+#define false		-1
 
 /* Commandline configurable items */
 
@@ -31,6 +39,68 @@ int   vnc_port = 5900;
 char *vnc_method = NULL;
 char *vnc_password = NULL;
 int   vnc_framerate = 12;
+
+void apply_surface( int x, int y, SDL_Surface* source, SDL_Surface* destination )
+{
+    //Holds offsets
+    SDL_Rect offset;
+
+    //Get offsets
+    offset.x = x;
+    offset.y = y;
+
+    //Blit
+    SDL_BlitSurface( source, NULL, destination, &offset );
+}
+
+int SplashScreen(SDL_Surface *screen)
+{
+	TTF_Font *font = NULL;
+	SDL_Surface *title = NULL;
+
+	//The color of the font 
+	SDL_Color textColor = { 255, 255, 255 }; 
+
+	 /* Black screen */
+	 SDL_FillRect(screen,NULL,0);
+ 	SDL_UpdateRect(screen,0,0,0,0);
+
+	//Initialize SDL_ttf 
+	if( TTF_Init() == -1 ) 
+	{ 
+		return false; 
+	} 
+
+	//Open the font 
+	font = TTF_OpenFont(FONT, 28 ); 
+
+	//If there was an error in loading the font 
+	if( font == NULL ) { 
+		fprintf(stderr,"Cannot open font\n");
+		return false; 
+	} 
+
+	//Render the text 
+	title = TTF_RenderText_Blended( font, "sdlVNC", textColor ); 
+
+	//If there was an error in rendering the text 
+	if( title == NULL ) { return 1; } 
+
+	//Apply the images to the screen 
+	apply_surface( 0, 0, title, screen ); 
+
+	title = TTF_RenderText_Blended( font, VERSION, textColor ); 
+	apply_surface( 240, 0, title, screen ); 
+
+
+ 	SDL_UpdateRect(screen,0,0,0,0);
+
+	SDL_FreeSurface( title ); 
+	//Close the font that was used 
+	TTF_CloseFont( font ); 
+	//Quit SDL_ttf 
+//	TTF_Quit(); 
+}
 
 char GetTextKey(SDL_Surface *screen)
 {
@@ -78,28 +148,31 @@ char GetTextKey(SDL_Surface *screen)
 /* Very hacky! Just want to get something that doesnt requrie command line for now */
 char* GetHostname(SDL_Surface *screen)
 {
-        SFont_Font* Font;
+        TTF_Font *font;
 	int	inloop=1;
 	char*	hostName;
+	char*	hostTemp;
+
 	char	key;
+	SDL_Surface	*title;
+	SDL_Color textColor = { 255, 255, 255 }; 
 
 	fprintf(stderr,"Blah6");
 	hostName = calloc(50,sizeof(char));
 
-	 /* Black screen */
-	 SDL_FillRect(screen,NULL,0);
- 	SDL_UpdateRect(screen,0,0,0,0);
+	font = TTF_OpenFont(FONT, 28 ); 
 
-        // Load and Prepare the font - You don't have to use the IMGlib for this
-        Font = SFont_InitFont(IMG_Load("24P_Copperplate_Blue.png"));
-        if(!Font) {
-                fprintf(stderr, "An error occured while loading the font.");
-                exit(1);
-        }
+	//If there was an error in loading the font 
+	if( font == NULL ) { 
+		fprintf(stderr,"Cannot open font2\n");
+		return false; 
+	} 
 
-        // a simple text blit to (0/0)
-        SFont_Write (screen, Font, 0,0,"sdlvnc - WebOS");
-	SFont_Write (screen, Font, 0,100,"Enter Hostname:");
+	title = TTF_RenderText_Blended( font, "Enter Hostname:", textColor ); 
+	if (title == NULL){
+		fprintf(stderr,"Cannot render text?");
+	}
+	apply_surface( 0, 180, title, screen ); 
 	fprintf(stderr,"Blah3");
         // Update the screen
         SDL_UpdateRect(screen, 0, 0, 0, 0);
@@ -122,18 +195,36 @@ char* GetHostname(SDL_Surface *screen)
 			case 24:
 			case 16: //Nothing
 				break;
+			case 8:
+				if (hostTemp !=NULL)
+				{
+					free(hostTemp);
+				}
+				hostTemp = calloc(50,sizeof(char));
+				strncpy(hostTemp,hostName,strlen(hostName)-1);
+				free(hostName);
+				hostName=strdup(hostTemp);
+				title = TTF_RenderText_Blended( font, hostName, textColor ); 
+				apply_surface( 0,220, title, screen ); 
+			        SDL_UpdateRect(screen, 0, 0, 0, 0);
+				break;
 			default:
 				strncat(hostName,&key,1);
-				SFont_Write (screen, Font, 0,200,hostName);
+				title = TTF_RenderText_Blended( font, hostName, textColor ); 
+				apply_surface( 0,220, title, screen ); 
 			        SDL_UpdateRect(screen, 0, 0, 0, 0);
-		}
+			}
 		}
 	        SDL_Delay(1000);
 
 	}
 
-        // Don't forget to free our font
-        SFont_FreeFont(Font);
+	SDL_FreeSurface( title ); 
+	//Close the font that was used 
+	TTF_CloseFont( font ); 
+	//Quit SDL_ttf 
+	TTF_Quit(); 
+
 	return hostName;
 }
 
@@ -455,6 +546,7 @@ void PrintUsage()
 	/* Get Parameters */
 	if (vnc_server == NULL)
 	{
+		SplashScreen(screen);
 		vnc_server=GetHostname(screen);
 	}
 
@@ -470,5 +562,6 @@ void PrintUsage()
 		vncDisconnect(&vnc);
 
 	free(vnc_server);	
+	TTF_Quit();
 	return(0);
 }

@@ -5513,7 +5513,7 @@ if test "x$ac_cv_lib_SDL_vnc_vncConnect_" = x""yes; then :
 fi
 
 if test x$have_sdlvnc = xyes; then
-    LIBS="$LIBS -lSDL_vnc -lSDL_image"
+    LIBS="$LIBS -lSDL_vnc -lSDL_image -lSDL_ttf"
 else
     as_fn_error "
 *** Unable to find SDL_vnc library

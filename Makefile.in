@@ -52,7 +52,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_sdlvnc_OBJECTS = sdlvnc.$(OBJEXT) SFont.$(OBJEXT)
+am_sdlvnc_OBJECTS = sdlvnc.$(OBJEXT)
 sdlvnc_OBJECTS = $(am_sdlvnc_OBJECTS)
 sdlvnc_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@
@@ -188,7 +188,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = no-dependencies
-sdlvnc_SOURCES = sdlvnc.c SFont.c
+sdlvnc_SOURCES = sdlvnc.c
 DISTCLEANFILES = *~ *~c *~h *.cross.cache inc
 all: all-am
 

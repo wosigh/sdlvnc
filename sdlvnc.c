@@ -504,7 +504,7 @@ void PrintUsage()
 	/* Check/Adjust VNC parameters */
 	if (vnc_server==NULL) {
 	 fprintf (stderr,"Need VNC server.\n");
-//	 PrintUsage();
+	 PrintUsage();
 //         exit(1);
         }
         if (vnc_method==NULL) {	

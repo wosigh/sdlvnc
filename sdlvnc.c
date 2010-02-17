@@ -15,6 +15,13 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <errno.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_ttf.h>
@@ -23,7 +30,7 @@
 
 #define DEFAULT_W	320
 #define DEFAULT_H	480
-#define VERSION		"1.00"
+#define VERSION		"1.05"
 //Ubuntu
 //#define FONT		"/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
 //Palm Pre
@@ -81,7 +88,7 @@ int SplashScreen(SDL_Surface *screen)
 	} 
 
 	//Render the text 
-	title = TTF_RenderText_Blended( font, "sdlVNC", textColor ); 
+	title = TTF_RenderText_Solid( font, "sdlVNC", textColor ); 
 
 	//If there was an error in rendering the text 
 	if( title == NULL ) { return 1; } 
@@ -89,7 +96,7 @@ int SplashScreen(SDL_Surface *screen)
 	//Apply the images to the screen 
 	apply_surface( 0, 0, title, screen ); 
 
-	title = TTF_RenderText_Blended( font, VERSION, textColor ); 
+	title = TTF_RenderText_Solid( font, VERSION, textColor ); 
 	apply_surface( 240, 0, title, screen ); 
 
 
@@ -114,7 +121,7 @@ char GetTextKey(SDL_Surface *screen)
    switch (event.type) {
 
     case SDL_KEYDOWN:
-    case SDL_KEYUP:
+//    case SDL_KEYUP:
      /* Map SDL key to VNC key */
      key = event.key.keysym.sym;
      switch (event.key.keysym.sym) {
@@ -157,7 +164,7 @@ char* GetHostname(SDL_Surface *screen)
 	SDL_Surface	*title;
 	SDL_Color textColor = { 255, 255, 255 }; 
 
-	fprintf(stderr,"Blah6");
+//	fprintf(stderr,"Blah6");
 	hostName = calloc(50,sizeof(char));
 
 	font = TTF_OpenFont(FONT, 28 ); 
@@ -168,12 +175,12 @@ char* GetHostname(SDL_Surface *screen)
 		return false; 
 	} 
 
-	title = TTF_RenderText_Blended( font, "Enter Hostname:", textColor ); 
+	title = TTF_RenderText_Solid( font, "Enter Hostname:", textColor ); 
 	if (title == NULL){
 		fprintf(stderr,"Cannot render text?");
 	}
 	apply_surface( 0, 180, title, screen ); 
-	fprintf(stderr,"Blah3");
+//	fprintf(stderr,"Blah3");
         // Update the screen
         SDL_UpdateRect(screen, 0, 0, 0, 0);
 
@@ -191,6 +198,7 @@ char* GetHostname(SDL_Surface *screen)
 				break;
 			// Catch anything that isnt text -- Horrid code but I dont have the time to clean up
 			case 0:
+			case 234:
 			case 32:
 			case 24:
 			case 16: //Nothing
@@ -204,13 +212,13 @@ char* GetHostname(SDL_Surface *screen)
 				strncpy(hostTemp,hostName,strlen(hostName)-1);
 				free(hostName);
 				hostName=strdup(hostTemp);
-				title = TTF_RenderText_Blended( font, hostName, textColor ); 
+				title = TTF_RenderText_Solid( font, hostName, textColor ); 
 				apply_surface( 0,220, title, screen ); 
 			        SDL_UpdateRect(screen, 0, 0, 0, 0);
 				break;
 			default:
 				strncat(hostName,&key,1);
-				title = TTF_RenderText_Blended( font, hostName, textColor ); 
+				title = TTF_RenderText_Solid( font, hostName, textColor ); 
 				apply_surface( 0,220, title, screen ); 
 			        SDL_UpdateRect(screen, 0, 0, 0, 0);
 			}
@@ -233,26 +241,51 @@ void Draw(SDL_Surface *screen, tSDL_vnc *vnc)
 {
  SDL_Event event; 
  SDL_Rect updateRect;
+ SDL_Surface *virt;
+ SDL_Rect viewport;
+ SDL_Rect origin;
+
+ int inPan=0;
  int inloop;
  Uint8 mousebuttons, buttonmask;
- int mousex, mousey;
- Uint32 key;
-   
+ int mousex=0;
+ int mousey=0;
+ int priormousex=0;
+ int priormousey=0;
+ int mousedown=0;
+ int velocity=0;
+
+ Uint32 key;   
  /* Black screen */
  SDL_FillRect(screen,NULL,0);
  SDL_UpdateRect(screen,0,0,0,0);
+// Create virtual screen 
+
+	virt = SDL_CreateRGBSurface( SDL_SWSURFACE, 2000, 1080, screen->format->BitsPerPixel, screen->format->Rmask, screen->format->Gmask, screen->format->Bmask, 0 ); 
+	Uint32 red = SDL_MapRGB(screen->format, 240, 0, 20);
+	SDL_FillRect(virt,NULL,red);
+	viewport.x =0;
+	viewport.y =0;
+	viewport.w = DEFAULT_W;
+	viewport.h = DEFAULT_H;
+	origin.x=0;
+	origin.y=0;
+	origin.w=DEFAULT_W;
+	origin.h=DEFAULT_H;
   
  inloop=1;
  while (inloop) {
     
   /* Check for events */
   while ( SDL_PollEvent(&event) ) {
+//	fprintf(stderr,"***EVENT**%d\n",event.type);
    switch (event.type) {
-
     case SDL_KEYDOWN:
     case SDL_KEYUP:
      /* Map SDL key to VNC key */
      key = event.key.keysym.sym;
+//     fprintf(stderr,"**KEY0** %d\n",key);
+
      switch (event.key.keysym.sym) {
       case SDLK_BACKSPACE: key=0xff08; break;
       case SDLK_TAB: key=0xff09; break;
@@ -281,28 +314,75 @@ void Draw(SDL_Surface *screen, tSDL_vnc *vnc)
       case SDLK_F11: key=0xffc8; break;
       case SDLK_F12: key=0xffc9; break;
       case SDLK_LSHIFT: key=0xffe1; break;
-      case SDLK_RSHIFT: key=0xffe2; break;
+      case SDLK_RSHIFT: key=0xffe2; inPan=0;break;
       case SDLK_LCTRL: key=0xffe3; break;
+// RCTRL is the sym key
       case SDLK_RCTRL: key=0xffe4; break;
       case SDLK_LMETA: key=0xffe7; break;
       case SDLK_RMETA: key=0xffe8; break;
       case SDLK_LALT: key=0xffe9; break;
-      case SDLK_RALT: key=0xffea; break;
+// RALT is the Orange Key
+// Need to dump it in order for the alternate keys to work for now
+//      case SDLK_RALT: key=0xffea; break;
+      case SDLK_RALT: key=0x0000; break;
+      case 234: key=0x0000; break;
       default: key = event.key.keysym.sym;
      }
      /* Handle upper case letters. */
      if (event.key.keysym.mod & KMOD_SHIFT) {
       key=toupper(key);
      }
-     /* Add client event */
-     vncClientKeyevent(vnc, (event.type==SDL_KEYDOWN), key);
+//     fprintf(stderr,"**KEY** %d\n",key);
+
+     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == 231) {
+		inPan=1;
+		mousedown=1;
+     } else if (event.type == SDL_KEYUP && event.key.keysym.sym == 231) {
+                inPan=0;
+		mousedown=0;
+     } else if (key != 0x0000) {
+//     fprintf(stderr,"**KEY2** %d\n",key);
+	/* Add client event */
+	vncClientKeyevent(vnc, (event.type==SDL_KEYDOWN), key);
+     }
      break;
 
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP:
     case SDL_MOUSEMOTION:
+
      /* Get current mouse state */
+	priormousex = mousex;
+	priormousey = mousey;
      mousebuttons=SDL_GetMouseState(&mousex,&mousey);
+
+	if (event.type == SDL_MOUSEBUTTONDOWN)
+		mousedown=1;
+	if (event.type == SDL_MOUSEBUTTONUP)
+		mousedown=0;
+
+	if (event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEBUTTONDOWN)
+	{
+		priormousex = mousex;
+		priormousey = mousey;
+	}
+	// Pan?
+//		fprintf(stderr,"**Mouse**%d-%d\n",mousex,mousey);
+     if (inPan==1 && mousedown==1)
+	{
+//		fprintf(stderr,"**PAN**%d-%d\n",mousex,mousey);
+		viewport.x=viewport.x-(mousex - priormousex);
+		viewport.y=viewport.y-(mousey - priormousey);
+//		viewport.w=viewport.x+320;
+//		viewport.h=viewport.y+480;
+//		fprintf(stderr,"**PAN**%d-%d  %d-%d   %d-%d\n",mousex,mousey,priormousex,priormousey,viewport.x,viewport.y);
+		if (viewport.x < 0) {
+			viewport.x=0;
+		}
+		if (viewport.y < 0) {
+			viewport.y=0;
+		}
+	}
      /* Map SDL buttonmask to VNC buttonmask */
      buttonmask=0;
      if (mousebuttons & SDL_BUTTON(SDL_BUTTON_LEFT)) buttonmask       |= 1;
@@ -311,7 +391,9 @@ void Draw(SDL_Surface *screen, tSDL_vnc *vnc)
      if (mousebuttons & SDL_BUTTON(SDL_BUTTON_WHEELUP)) buttonmask    |= 8;
      if (mousebuttons & SDL_BUTTON(SDL_BUTTON_WHEELDOWN)) buttonmask  |= 16;
      /* Add client event */
-     vncClientPointerevent(vnc, buttonmask, mousex, mousey);
+    if (inPan != 1){
+     vncClientPointerevent(vnc, buttonmask, mousex+viewport.x, mousey+viewport.y);
+	}
      break;
 
     case SDL_QUIT:
@@ -321,12 +403,19 @@ void Draw(SDL_Surface *screen, tSDL_vnc *vnc)
    }
 
    /* Blit VNC screen */
-   if (vncBlitFramebuffer(vnc, screen, &updateRect) ) {
+   if (vncBlitFramebuffer(vnc, virt, &updateRect) || inPan==1) {
     /* Display by updating changed parts of the display */
-    SDL_UpdateRect(screen,updateRect.x,updateRect.y,updateRect.w,updateRect.h);
+//    SDL_UpdateRect(screen,updateRect.x,updateRect.y,updateRect.w,updateRect.h);
+//    apply_surface(viewport.x,viewport.y,virt,screen);
+	SDL_BlitSurface(virt,&viewport,screen,&origin);
+    SDL_UpdateRect(virt,0,0,0,0);
+//    SDL_UpdateRect(screen,updateRect.x,updateRect.y,updateRect.w,updateRect.h);
+//    SDL_UpdateRect(screen,0,0,320,480);
+    SDL_UpdateRect(screen,0,0,0,0);
+
    }
-    
    /* Delay to limit rate */                   
+  if(inPan != 1)
    SDL_Delay(1000/vnc_framerate);
    
  }
@@ -378,7 +467,7 @@ void PrintUsage()
 	int result;
 
 	/* Title */
-	fprintf (stderr,"sdlvnc - Based on SDL_vnc Sample VNC Client - LGPL, A. Schiffler, aschiffler@appwares.com\n\n");
+	fprintf (stderr,"sdlvnc %s - Based on SDL_vnc Sample VNC Client - LGPL, A. Schiffler, aschiffler@appwares.com\n\n",VERSION);
 
         if (argc==1) {
 //         PrintUsage();
@@ -546,9 +635,19 @@ void PrintUsage()
 	/* Get Parameters */
 	if (vnc_server == NULL)
 	{
+
 		SplashScreen(screen);
 		vnc_server=GetHostname(screen);
 	}
+
+	    	struct hostent *he;
+    		struct in_addr **addr_list;
+		printf("1Address: %s\n",vnc_server);
+		he =gethostbyname(vnc_server);
+		addr_list = (struct in_addr **)he->h_addr_list;
+		vnc_server=strdup(inet_ntoa(*addr_list[0]));
+
+		printf("Address: %s",vnc_server);
 
 	/* Open vnc connection */
 	result =vncConnect(&vnc,vnc_server,vnc_port,"hextile,rre,copyrect,raw,cursor","lyoner",10);
